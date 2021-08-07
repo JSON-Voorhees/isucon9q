@@ -100,6 +100,11 @@ type Item struct {
 	UpdatedAt   time.Time `json:"-" db:"updated_at"`
 }
 
+type ItemUser struct {
+	Item *Item `db:"i"`
+	User *User `db:"u"`
+}
+
 type ItemSimple struct {
 	ID         int64       `json:"id"`
 	SellerID   int64       `json:"seller_id"`
@@ -551,11 +556,37 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items := []Item{}
+	// items := []Item{}
+	itemUsers := []ItemUser{}
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `status` IN (?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		err := dbx.Select(&itemUsers,
+			`
+				SELECT
+					items.id AS "i.id",
+					items.seller_id AS "i.seller_id",
+					items.buyer_id AS "i.buyer_id",
+					items.status AS "i.status",
+					items.name AS "i.name",
+					items.price AS "i.price",
+					items.description AS "i.description",
+					items.image_name AS "i.image_name",
+					items.category_id AS "i.category_id",
+					items.created_at AS "i.created_at",
+					items.updated_at AS "i.updated_at",
+					users.id AS "u.id",
+					users.account_name AS "u.account_name",
+					users.hashed_password AS "u.hashed_password",
+					users.address AS "u.address",
+					users.num_sell_items AS "u.num_sell_items",
+					users.last_bump AS "u.last_bump",
+					users.created_at AS "u.created_at"
+				FROM items
+				JOIN users
+				ON items.seller_id = users.id
+				WHERE 
+					items.status IN (?,?) AND (items.created_at < ?  OR (items.created_at <= ? AND items.id < ?)) ORDER BY items.created_at DESC, items.id DESC LIMIT ?
+			`,
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			time.Unix(createdAt, 0),
@@ -570,8 +601,32 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// 1st page
-		err := dbx.Select(&items,
-			"SELECT * FROM `items` WHERE `status` IN (?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		err := dbx.Select(&itemUsers,
+			`
+			SELECT
+				items.id AS "i.id",
+				items.seller_id AS "i.seller_id",
+				items.buyer_id AS "i.buyer_id",
+				items.status AS "i.status",
+				items.name AS "i.name",
+				items.price AS "i.price",
+				items.description AS "i.description",
+				items.image_name AS "i.image_name",
+				items.category_id AS "i.category_id",
+				items.created_at AS "i.created_at",
+				items.updated_at AS "i.updated_at",
+				users.id AS "u.id",
+				users.account_name AS "u.account_name",
+				users.hashed_password AS "u.hashed_password",
+				users.address AS "u.address",
+				users.num_sell_items AS "u.num_sell_items",
+				users.last_bump AS "u.last_bump",
+				users.created_at AS "u.created_at"
+			FROM items
+			JOIN users
+			ON items.seller_id = users.id
+			WHERE items.status IN (?,?) ORDER BY items.created_at DESC, items.id DESC LIMIT ?
+			`,
 			ItemStatusOnSale,
 			ItemStatusSoldOut,
 			ItemsPerPage+1,
@@ -583,29 +638,35 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := make([]ItemSimple, len(items))
-	for i, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			return
+	itemSimples := make([]ItemSimple, len(itemUsers))
+	for i, iu := range itemUsers {
+		/*
+			seller, err := getUserSimpleByID(dbx, item.SellerID)
+			if err != nil {
+				outputErrorMsg(w, http.StatusNotFound, "seller not found")
+				return
+			}*/
+		seller := &UserSimple{
+			ID:           iu.User.ID,
+			AccountName:  iu.User.AccountName,
+			NumSellItems: iu.User.NumSellItems,
 		}
-		category, err := getCategoryByID(dbx, item.CategoryID)
+		category, err := getCategoryByID(dbx, iu.Item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
 		itemSimples[i] = ItemSimple{
-			ID:         item.ID,
-			SellerID:   item.SellerID,
-			Seller:     &seller,
-			Status:     item.Status,
-			Name:       item.Name,
-			Price:      item.Price,
-			ImageURL:   getImageURL(item.ImageName),
-			CategoryID: item.CategoryID,
+			ID:         iu.Item.ID,
+			SellerID:   iu.Item.SellerID,
+			Seller:     seller,
+			Status:     iu.Item.Status,
+			Name:       iu.Item.Name,
+			Price:      iu.Item.Price,
+			ImageURL:   getImageURL(iu.Item.ImageName),
+			CategoryID: iu.Item.CategoryID,
 			Category:   &category,
-			CreatedAt:  item.CreatedAt.Unix(),
+			CreatedAt:  iu.Item.CreatedAt.Unix(),
 		}
 	}
 
