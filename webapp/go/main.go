@@ -512,6 +512,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	categoriesCache = make(map[int]*Category, len(allCategories))
 	for _, c := range allCategories {
 		categoriesCache[c.ID] = c
 	}
