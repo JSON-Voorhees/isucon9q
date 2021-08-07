@@ -826,14 +826,14 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemSimples := []ItemSimple{}
-	for _, item := range items {
+	itemSimples := make([]ItemSimple, len(items))
+	for i, item := range items {
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
-		itemSimples = append(itemSimples, ItemSimple{
+		itemSimples[i] = ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
 			Seller:     &userSimple,
@@ -844,7 +844,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 			CategoryID: item.CategoryID,
 			Category:   &category,
 			CreatedAt:  item.CreatedAt.Unix(),
-		})
+		}
 	}
 
 	hasNext := false
